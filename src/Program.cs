@@ -6,6 +6,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,6 +46,12 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.UseStaticFiles(new StaticFileOptions()                                       
+{
+    FileProvider = new PhysicalFileProvider(Path.Combine(AppContext.BaseDirectory, @"images")),
+    RequestPath = new PathString("/images")
+});
+
 #endregion 
 
 #region routers
@@ -72,7 +79,25 @@ app.MapPost("/signup", [AllowAnonymous] async (MjAppDbContext db, User user) =>
     return Results.Ok(user);
 });
 
-app.MapPost("/items",[Authorize] async (MjAppDbContext db, Item item) => {
+app.MapPost("/upload", async Task<IResult> (HttpRequest request) =>
+ {
+     if (!request.HasFormContentType)
+         return Results.BadRequest();
+
+     var form = await request.ReadFormAsync();
+     var fi = form.Files["file"];
+
+     if (fi is null || fi.Length == 0)
+         return Results.BadRequest();
+
+     var svrpath = Path.Combine(AppContext.BaseDirectory, "images", $"{DateTime.Now.Ticks}{Path.GetExtension(fi.FileName)}");
+     await using var stream = fi.OpenReadStream();
+     using var fs = File.Create(svrpath);
+     await stream.CopyToAsync(fs);
+    return Results.Ok(svrpath);
+});
+
+app.MapPost("/items", async (MjAppDbContext db, Item item) => {
     if( await db.Items.FirstOrDefaultAsync(x => x.Id == item.Id) != null)
     {
         return Results.BadRequest();
@@ -80,10 +105,10 @@ app.MapPost("/items",[Authorize] async (MjAppDbContext db, Item item) => {
 
     db.Items.Add(item);
     await db.SaveChangesAsync();
-    return Results.Created( $"/Items/{item.Id}",item);
+    return Results.Created( $"/items/{item.Id}",item);
 });
 
-app.MapGet("/items/{id}", [Authorize] async (MjAppDbContext db, int id) =>
+app.MapGet("/items/{id}",async (MjAppDbContext db, int id) =>
 {
     var item = await db.Items.FirstOrDefaultAsync(x => x.Id == id);
 
@@ -97,23 +122,19 @@ app.MapPut("/items/{id}", async (MjAppDbContext db, int id, Item item) =>
     {
         return Results.BadRequest();
     }
-
-    existItem.Title = item.Title;
-    existItem.IsCompleted = item.IsCompleted;
-
     await db.SaveChangesAsync();
     return Results.Ok(item);
 });
 
 app.MapDelete("/items/{id}", async (MjAppDbContext db, int id) => 
 {
-    var existItem = await db.Items.FirstOrDefaultAsync(x => x.Id == id);
-    if(existItem == null)
+    var item = await db.Items.FirstOrDefaultAsync(x => x.Id == id);
+    if(item == null)
     {
         return Results.BadRequest();
     }
 
-    db.Items.Remove(existItem);
+    db.Items.Remove(item);
     await db.SaveChangesAsync();
     return Results.NoContent();
 });
@@ -156,7 +177,8 @@ class MjAppDbContext : DbContext
 {
     public DbSet<Item> Items { get; set; }
     public DbSet<User> Users { get; set; }
-
+    public DbSet<Supplier> Suppliers { get; set; }
+    public DbSet<SupplierItem> SupplierItems { get; set; }
     public MjAppDbContext(DbContextOptions<MjAppDbContext> options) : base(options) {}
 }
 
@@ -176,16 +198,54 @@ class MjAppDbContextFactory : IDesignTimeDbContextFactory<MjAppDbContext>
     }
 }
 
+
+
 public class User
-{    public int Id { get; set; }
+{    
+    public int Id { get; set; }
     public string? UserName { get; set; }
     public string? Password { get; set; }
+    public DateTime CreateTime { get; set; } = DateTime.Now;
+    public string? Creator { get; set; }
 }
 
 class Item
 {
     public int Id { get; set; }
-    public string? Title { get; set; }
-    public bool IsCompleted { get; set; }
+    public string? ItemName { get; set; }
+    public string? ItemCode { get; set; }
+    public decimal Volume { get; set; } = 0;
+    public decimal PackageQty { get; set; } = 0;
+    public decimal Price { get; set; } = 0;
+    public string? ItemCate { get; set; }
+    public string? ItemStyle { get; set; }
+    public string? ItemModel { get; set; }
+    public string? PicPath { get; set; }
+    public DateTime CreateTime { get; set; } = DateTime.Now;
+    public string? Creator { get; set; }
 }
+
+class Supplier 
+{
+    public int Id { get; set; }
+    public string? SupplierName { get; set; }
+    public string? SupplierCode { get; set; }
+    public string? SupplierMobile { get; set; }
+    public string? SupplierAddress { get; set; }
+    public DateTime CreateTime { get; set; } = DateTime.Now;
+    public string? Creator { get; set; }
+}
+
+class SupplierItem
+{
+    public int Id { get; set; }
+    public string? ItemCode { get; set; }
+    public decimal PackageQty { get; set; } = 0;
+    public decimal CostPrice { get; set; } = 0;
+    public string? SupplierItemModel { get; set; }
+    public DateTime CreateTime { get; set; } = DateTime.Now;
+    public string? Creator { get; set; }
+}
+
+
 #endregion
