@@ -15,6 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration["ConnectionStrings:SqliteConnection"];
 builder.Services.AddDbContext<MjAppDbContext>(options =>options.UseSqlite(connectionString));
 
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -97,7 +98,7 @@ app.MapPost("/signup", [AllowAnonymous] async (MjAppDbContext db, UserDto user) 
     return Results.Ok(user);
 });
 
-app.MapPost("/upload", async Task<IResult> (HttpRequest request) =>
+app.MapPost("/upload",[Authorize] async Task<IResult> (HttpRequest request) =>
  {
      if (!request.HasFormContentType)
          return Results.BadRequest();
@@ -116,7 +117,7 @@ app.MapPost("/upload", async Task<IResult> (HttpRequest request) =>
      return Results.Created($"/images/{svrFn}",string.Empty);
  });
 
-app.MapPost("/item", async (MjAppDbContext db, Item item) => {
+app.MapPost("/item", [Authorize] async (MjAppDbContext db, Item item) => {
     if(await db.Items.FirstOrDefaultAsync(x => x.Id == item.Id) != null)
     {
         return Results.BadRequest();
@@ -127,7 +128,7 @@ app.MapPost("/item", async (MjAppDbContext db, Item item) => {
     return Results.Created( $"/item/{item.Id}",item);
 });
 
-app.MapGet("/item", async (MjAppDbContext db, PagingData pageData) => {
+app.MapGet("/item", [Authorize] async (MjAppDbContext db, PagingData pageData) => {
     var ets = from et in db.Items
               select et;
     if (!string.IsNullOrEmpty(pageData.SearchString))
@@ -136,17 +137,17 @@ app.MapGet("/item", async (MjAppDbContext db, PagingData pageData) => {
                                || s.ItemCode.Contains(pageData.SearchString));
     }
     ets = ets.OrderByDescending(s => s.Id);
-    var p = await Page<Item>.CreateAsync(ets, pageData.CurrentPage);
+    var p = await Page<Item>.CreateAsync(ets, pageData.CurrentPage,pageData.PageSize);
     return Results.Ok(p);
 });
 
-app.MapGet("/item/{id}",async (MjAppDbContext db, int id) =>
+app.MapGet("/item/{id}", [Authorize] async (MjAppDbContext db, int id) =>
 {
     var et = await db.Items.FirstOrDefaultAsync(x => x.Id == id);
     return et == null ? Results.NotFound() : Results.Ok(et);
 });
 
-app.MapPut("/item/{id}", async (MjAppDbContext db, int id, Item item) =>
+app.MapPut("/item/{id}", [Authorize] async (MjAppDbContext db, int id, Item item) =>
 {
     var et = await db.Items.FirstOrDefaultAsync(x => x.Id == id);
     if(et == null)
@@ -169,7 +170,7 @@ app.MapPut("/item/{id}", async (MjAppDbContext db, int id, Item item) =>
     return Results.Ok(et);
 });
 
-app.MapDelete("/item/{id}", async (MjAppDbContext db, int id) => 
+app.MapDelete("/item/{id}", [Authorize] async (MjAppDbContext db, int id) => 
 {
     var et = await db.Items.FirstOrDefaultAsync(x => x.Id == id);
     if(et == null)
@@ -183,7 +184,7 @@ app.MapDelete("/item/{id}", async (MjAppDbContext db, int id) =>
 });
 
 
-app.MapPost("/supplier", async (MjAppDbContext db, Supplier supplier) => {
+app.MapPost("/supplier", [Authorize] async (MjAppDbContext db, Supplier supplier) => {
     if (await db.Suppliers.FirstOrDefaultAsync(x => x.Id == supplier.Id) != null)
     {
         return Results.BadRequest();
@@ -200,7 +201,7 @@ app.MapGet("/supplier/{id}", async (MjAppDbContext db, int id) =>
     return et == null ? Results.NotFound() : Results.Ok(et);
 });
 
-app.MapPut("/supplier/{id}", async (MjAppDbContext db, int id, Supplier supplier) =>
+app.MapPut("/supplier/{id}", [Authorize] async (MjAppDbContext db, int id, Supplier supplier) =>
 {
     var et = await db.Suppliers.FirstOrDefaultAsync(x => x.Id == id);
     if (et == null)
@@ -215,7 +216,7 @@ app.MapPut("/supplier/{id}", async (MjAppDbContext db, int id, Supplier supplier
     return Results.Ok(et);
 });
 
-app.MapDelete("/supplier/{id}", async (MjAppDbContext db, int id) =>
+app.MapDelete("/supplier/{id}", [Authorize] async (MjAppDbContext db, int id) =>
 {
     var et = await db.Suppliers.FirstOrDefaultAsync(x => x.Id == id);
     if (et == null)
@@ -240,7 +241,7 @@ app.MapPost("/supplieritem", async (MjAppDbContext db, SupplierItem supplierItem
 });
 
 
-app.MapGet("/supplieritem", async (MjAppDbContext db, PagingData pageData) => {
+app.MapGet("/supplieritem", [Authorize] async (MjAppDbContext db, PagingData pageData) => {
     var ets = db.SupplierItems.Join(
                 db.Items,
                 sit => sit.ItemCode,
@@ -270,18 +271,18 @@ app.MapGet("/supplieritem", async (MjAppDbContext db, PagingData pageData) => {
                              || s.ItemName.Contains(pageData.SearchString));
     }
     ets = ets.OrderByDescending(s => s.Id);
-    var p = await Page<SupplierItemDto>.CreateAsync(ets, pageData.CurrentPage);
+    var p = await Page<SupplierItemDto>.CreateAsync(ets, pageData.CurrentPage, pageData.PageSize);
     return Results.Ok(p);
 });
 
 
-app.MapGet("/supplieritem/{id}", async (MjAppDbContext db, int id) =>
+app.MapGet("/supplieritem/{id}", [Authorize] async (MjAppDbContext db, int id) =>
 {
     var et = await db.SupplierItems.FirstOrDefaultAsync(x => x.Id == id);
     return et == null ? Results.NotFound() : Results.Ok(et);
 });
 
-app.MapPut("/supplieritem/{id}", async (MjAppDbContext db, int id, SupplierItem supplierItem) =>
+app.MapPut("/supplieritem/{id}", [Authorize] async (MjAppDbContext db, int id, SupplierItem supplierItem) =>
 {
     var et = await db.SupplierItems.FirstOrDefaultAsync(x => x.Id == id);
     if (et == null)
@@ -295,7 +296,7 @@ app.MapPut("/supplieritem/{id}", async (MjAppDbContext db, int id, SupplierItem 
     return Results.Ok(et);
 });
 
-app.MapDelete("/supplieritem/{id}", async (MjAppDbContext db, int id) =>
+app.MapDelete("/supplieritem/{id}", [Authorize] async (MjAppDbContext db, int id) =>
 {
     var et = await db.SupplierItems.FirstOrDefaultAsync(x => x.Id == id);
     if (et == null)
@@ -321,10 +322,11 @@ app.Run($"http://192.168.110.187:{port}");
 
 class PagingData
 {
-    // GET /products?SortBy=xyz&SortDir=Desc&Page=99&wd=foo
+    // GET /products?SortBy=xyz&SortDir=Desc&Page=99&size=50&wd=foo
     public string? SortBy { get; init; }
     public SortDirection SortDirection { get; init; }
     public int CurrentPage { get; init; } = 1;
+    public int PageSize { get; init; } = 50;
 
     public string? SearchString { get; init; }
 
@@ -333,11 +335,13 @@ class PagingData
         const string sortByKey = "sortBy";
         const string sortDirectionKey = "sortDir";
         const string currentPageKey = "page";
+        const string pageSizeKey = "size";
         const string searchStringKey = "wd";
 
         Enum.TryParse<SortDirection>(context.Request.Query[sortDirectionKey],
                                      ignoreCase: true, out var sortDirection);
         int.TryParse(context.Request.Query[currentPageKey], out var page);
+        int.TryParse(context.Request.Query[pageSizeKey], out var pageSize);
         page = page == 0 ? 1 : page;
 
 
@@ -346,6 +350,7 @@ class PagingData
             SortBy = context.Request.Query[sortByKey],
             SortDirection = sortDirection,
             CurrentPage = page,
+            PageSize = pageSize,
             SearchString = context.Request.Query[searchStringKey]
         };
 
@@ -367,12 +372,14 @@ class Page<T>
 {
     public int PageIndex { get; private set; }
     public int TotalPages { get; private set; }
+    public int TotalItems { get; private set; } = 0;
     public List<T> Data { get; set; }
 
-    public Page(List<T> items, int count, int pageIndex, int pageSize)
+    public Page(List<T> items, int count, int pageIndex, int pageSize, int totalItems)
     {
         PageIndex = pageIndex;
         TotalPages = (int)Math.Ceiling(count / (double)pageSize);
+        TotalItems = totalItems;
         Data = items;
     }
 
@@ -384,7 +391,7 @@ class Page<T>
     {
         var count = await source.CountAsync();
         var items = await source.Skip((pageIndex - 1) * pageSize).Take(pageSize).ToListAsync();
-        return new Page<T>(items, count, pageIndex, pageSize);
+        return new Page<T>(items, count, pageIndex, pageSize, count);
     }
 }
 
@@ -432,7 +439,7 @@ class MjAppDbContextFactory : IDesignTimeDbContextFactory<MjAppDbContext>
 {
     public MjAppDbContext CreateDbContext(string[] args)
     {
-        IConfigurationRoot configuration = new ConfigurationBuilder()
+        var configuration = new ConfigurationBuilder()
                   .SetBasePath(Directory.GetCurrentDirectory())
                   .AddJsonFile("appsettings.json")
                   .Build();
