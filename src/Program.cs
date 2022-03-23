@@ -11,6 +11,7 @@ using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
 var connectionString = builder.Configuration["ConnectionStrings:SqliteConnection"];
 builder.Services.AddDbContext<MjAppDbContext>(options =>options.UseSqlite(connectionString));
 
@@ -32,6 +33,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
     };
 });
 
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("cors",
+        builder => builder.AllowAnyOrigin()
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+    );
+});
+
 var app = builder.Build();
 
 #region middleware
@@ -47,6 +58,9 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
+
+app.UseCors("cors");
+
 app.UseStaticFiles(new StaticFileOptions()                                       
 {
     FileProvider = new PhysicalFileProvider(Path.Combine(AppContext.BaseDirectory, @"images")),
@@ -57,25 +71,28 @@ app.UseStaticFiles(new StaticFileOptions()
 
 #region routers
 
-app.MapPost("/signin", [AllowAnonymous] async (MjAppDbContext db, User user) =>
+app.MapPost("/signin", [AllowAnonymous] async (MjAppDbContext db, UserDto user) =>
 {
     var et = await db.Users.FirstOrDefaultAsync(k=>k.UserName == user.UserName && k.Password == user.Password);
     if(et == null){
         return Results.BadRequest();
     }
-    var token = JwtToken.Build(builder.Configuration["Jwt:Key"], builder.Configuration["Jwt:Issuer"], builder.Configuration["Jwt:Audience"], user);
+    var token = JwtToken.Build(builder.Configuration["Jwt:Key"], builder.Configuration["Jwt:Issuer"], builder.Configuration["Jwt:Audience"], et);
     return Results.Ok(new { UserName = user.UserName,Token = token });
 });
 
-app.MapPost("/signup", [AllowAnonymous] async (MjAppDbContext db, User user) =>
+app.MapPost("/signup", [AllowAnonymous] async (MjAppDbContext db, UserDto user) =>
 {
     var et = await db.Users.FirstOrDefaultAsync(k => k.UserName == user.UserName);
     if(et != null)
     {
         return Results.BadRequest();
     }
-
-    db.Users.Add(user);
+    var u = new User();
+    u.UserName = user.UserName;
+    u.Password = user.Password;
+    u.Creator = string.Empty;
+    db.Users.Add(u);
     await db.SaveChangesAsync();
     return Results.Ok(user);
 });
@@ -292,9 +309,14 @@ app.MapDelete("/supplieritem/{id}", async (MjAppDbContext db, int id) =>
 });
 #endregion
 
+
+var port = Environment.GetEnvironmentVariable("PORT") ?? "7053";
+
 // start 
 app.MapGet("/", () => "Dotnet Minimal API");
-app.Run();
+
+
+app.Run($"http://192.168.110.187:{port}");
 
 
 class PagingData
@@ -432,6 +454,13 @@ class User
     public DateTime CreateTime { get; set; } = DateTime.Now;
     public string? Creator { get; set; }
 }
+
+class UserDto
+{
+    public string UserName { get; set; }
+    public string Password { get; set; }
+}
+
 
 class Item
 {
